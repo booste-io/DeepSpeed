@@ -13,18 +13,18 @@ __global__ void fused_bias_gelu(float* input,
                                 int intermediate_size)
 {
     float4* input_cast = reinterpret_cast<float4*>(input);
-    const float4* bias_cast = reinterpret_cast<const float4*>(bias);
+    //const float4* bias_cast = reinterpret_cast<const float4*>(bias);
     int offset = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (offset < total_count) {
         float4 data = input_cast[offset];
-        float4 bias_data = bias_cast[offset % intermediate_size];
-
+        //float4 bias_data = bias_cast[offset % intermediate_size];
+        /* 
         data.x += bias_data.x;
         data.y += bias_data.y;
         data.z += bias_data.z;
         data.w += bias_data.w;
-
+        */
         data.x = gelu(data.x);
         data.y = gelu(data.y);
         data.z = gelu(data.z);
@@ -42,28 +42,28 @@ __global__ void fused_bias_gelu(__half* input,
 #if __CUDA_ARCH__ >= 700
 
     float2* input_cast = reinterpret_cast<float2*>(input);
-    const float2* bias_cast = reinterpret_cast<const float2*>(bias);
+    //const float2* bias_cast = reinterpret_cast<const float2*>(bias);
 
     int offset = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (offset < total_count) {
         float2 vals_vec = input_cast[offset];
-        float2 bias_vec = bias_cast[offset % intermediate_size];
+        //float2 bias_vec = bias_cast[offset % intermediate_size];
 
         __half2* vals_half = reinterpret_cast<__half2*>(&vals_vec);
-        __half2* bias_half = reinterpret_cast<__half2*>(&bias_vec);
+        //__half2* bias_half = reinterpret_cast<__half2*>(&bias_vec);
 
         float2 low_data = __half22float2(vals_half[0]);
         float2 high_data = __half22float2(vals_half[1]);
 
-        float2 low_bias = __half22float2(bias_half[0]);
-        float2 high_bias = __half22float2(bias_half[1]);
-
+        //float2 low_bias = __half22float2(bias_half[0]);
+        //float2 high_bias = __half22float2(bias_half[1]);
+        /*
         low_data.x += low_bias.x;
         low_data.y += low_bias.y;
         high_data.x += high_bias.x;
         high_data.y += high_bias.y;
-
+        */
         low_data.x = gelu(low_data.x);
         low_data.y = gelu(low_data.y);
         high_data.x = gelu(high_data.x);

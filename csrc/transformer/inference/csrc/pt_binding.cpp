@@ -339,7 +339,7 @@ at::Tensor ds_qkv_gemm_int8(at::Tensor& input,
 }
 
 template <typename T>
-at::Tensor ds_linear_layer(at::Tensor& input, at::Tensor& weight, at::Tensor& bias)
+at::Tensor ds_linear_layer(at::Tensor& input, at::Tensor& weight, at::Tensor& bias, bool add_bias)
 {
     auto input_cont = input.contiguous();
     auto options = at::TensorOptions()
@@ -367,12 +367,12 @@ at::Tensor ds_linear_layer(at::Tensor& input, at::Tensor& weight, at::Tensor& bi
                    (T*)input_cont.data_ptr(),
                    (T*)output.data_ptr(),
                    CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-
-    launch_bias_add((T*)output.data_ptr(),
-                    (T*)bias.data_ptr(),
-                    weight.size(1),
-                    bsz,
-                    Context::Instance().GetCurrentStream());
+    if (add_bias)
+        launch_bias_add((T*)output.data_ptr(),
+                        (T*)bias.data_ptr(),
+                        weight.size(1),
+                        bsz,
+                        Context::Instance().GetCurrentStream());
 
     return output;
 }
@@ -461,27 +461,10 @@ void mlp_unfused_cublas(at::Tensor& output,
                         at::Tensor& residual,
                         at::Tensor& input_bias,
                         at::Tensor& weight,
-                        at::Tensor& bias,
-                        at::Tensor& gamma,
-                        at::Tensor& beta,
-                        const float epsilon,
-                        bool preLayerNorm)
+                        at::Tensor& bias)
 {
     int bsz = input.size(0) * input.size(1);
-    auto inp_norm = preLayerNorm ? at::empty_like(input) : residual_add;
-
-    launch_residual_layer_norm((T*)inp_norm.data_ptr(),
-                               (T*)residual_add.data_ptr(),
-                               (T*)input.data_ptr(),
-                               (T*)residual.data_ptr(),
-                               (T*)input_bias.data_ptr(),
-                               (T*)gamma.data_ptr(),
-                               (T*)beta.data_ptr(),
-                               epsilon,
-                               bsz,
-                               input.size(2),
-                               preLayerNorm,
-                               Context::Instance().GetCurrentStream());
+    auto inp_norm = at::empty_like(input);
 
     float alpha = (T)1.0;
     float gemm_beta = (T)0.0;
@@ -510,11 +493,7 @@ std::vector<at::Tensor> ds_mlp_gemm(at::Tensor& input,
                                     at::Tensor& residual,
                                     at::Tensor& input_bias,
                                     at::Tensor& weight,
-                                    at::Tensor& bias,
-                                    at::Tensor& gamma,
-                                    at::Tensor& beta,
-                                    const float epsilon,
-                                    bool preLayerNorm)
+                                    at::Tensor& bias)
 {
     auto input_cont = input.contiguous();
     auto options = at::TensorOptions()
@@ -533,11 +512,7 @@ std::vector<at::Tensor> ds_mlp_gemm(at::Tensor& input,
                           residual,
                           input_bias,
                           weight,
-                          bias,
-                          gamma,
-                          beta,
-                          epsilon,
-                          preLayerNorm);
+                          bias);
 
     return {output, residual_add};
 }
