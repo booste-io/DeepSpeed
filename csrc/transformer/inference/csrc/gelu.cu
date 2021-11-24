@@ -166,24 +166,27 @@ template void launch_bias_add<__half>(__half*, const __half*, int, int, cudaStre
 
 __global__ void fused_bias_residual(float* input,
                                     const float* residual,
+                                    const float* attn_output,
                                     const float* bias,
                                     int total_count,
                                     int intermediate_size)
 {
     float4* input_cast = reinterpret_cast<float4*>(input);
     const float4* residual_cast = reinterpret_cast<const float4*>(residual);
+    const float4* attn_output_cast = reinterpret_cast<const float4*>(attn_output);
     const float4* bias_cast = reinterpret_cast<const float4*>(bias);
     int offset = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (offset < total_count) {
         float4 data = input_cast[offset];
         float4 res_vec = residual_cast[offset];
+        float4 attn_vec = attn_output_cast[offset];
         float4 bias_data = bias_cast[offset % intermediate_size];
 
-        data.x += (res_vec.x + bias_data.x);
-        data.y += (res_vec.y + bias_data.y);
-        data.z += (res_vec.z + bias_data.z);
-        data.w += (res_vec.w + bias_data.w);
+        data.x += (res_vec.x + attn_vec.x  + bias_data.x);
+        data.y += (res_vec.y + attn_vec.y  + bias_data.y);
+        data.z += (res_vec.z + attn_vec.z  + bias_data.z);
+        data.w += (res_vec.w + attn_vec.w  + bias_data.w);
 
         input_cast[offset] = data;
     }
@@ -191,6 +194,7 @@ __global__ void fused_bias_residual(float* input,
 
 __global__ void fused_bias_residual(__half* input,
                                     const __half* residual,
+                                    const __half* attn_output,
                                     const __half* bias,
                                     int total_count,
                                     int intermediate_size)
@@ -199,7 +203,7 @@ __global__ void fused_bias_residual(__half* input,
 
     float2* input_cast = reinterpret_cast<float2*>(input);
     const float2* residual_cast = reinterpret_cast<const float2*>(residual);
-
+    const float2* attn_output_cast = reinterpret_cast<const float2*>(attn_output);
     const float2* bias_cast = reinterpret_cast<const float2*>(bias);
 
     int offset = blockIdx.x * blockDim.x + threadIdx.x;
@@ -207,11 +211,12 @@ __global__ void fused_bias_residual(__half* input,
     if (offset < total_count) {
         float2 vals_vec = input_cast[offset];
         float2 res_vec = residual_cast[offset];
-
+        float2 attn_vec = attn_output_cast[offset];
         float2 bias_vec = bias_cast[offset % intermediate_size];
 
         __half2* vals_half = reinterpret_cast<__half2*>(&vals_vec);
         __half2* res_half = reinterpret_cast<__half2*>(&res_vec);
+        __half2* attn_half = reinterpret_cast<__half2*>(&attn_vec);
         __half2* bias_half = reinterpret_cast<__half2*>(&bias_vec);
 
         float2 low_data = __half22float2(vals_half[0]);
@@ -220,13 +225,16 @@ __global__ void fused_bias_residual(__half* input,
         float2 low_res = __half22float2(res_half[0]);
         float2 high_res = __half22float2(res_half[1]);
 
+        float2 low_attn = __half22float2(attn_half[0]);
+        float2 high_attn = __half22float2(attn_half[1]);
+
         float2 low_bias = __half22float2(bias_half[0]);
         float2 high_bias = __half22float2(bias_half[1]);
 
-        low_data.x += (low_res.x + low_bias.x);
-        low_data.y += (low_res.y + low_bias.y);
-        high_data.x += (high_res.x + high_bias.x);
-        high_data.y += (high_res.y + high_bias.y);
+        low_data.x += (low_res.x + low_attn.x + low_bias.x);
+        low_data.y += (low_res.y + low_attn.y + low_bias.y);
+        high_data.x += (high_res.x + high_attn.x + high_bias.x);
+        high_data.y += (high_res.y + high_attn.y + high_bias.y);
 
         vals_half[0] = __float22half2_rn(low_data);
         vals_half[1] = __float22half2_rn(high_data);
@@ -239,6 +247,7 @@ __global__ void fused_bias_residual(__half* input,
 template <typename T>
 void launch_bias_residual(T* input,
                           const T* residual,
+                          const T* attn_output,
                           const T* bias,
                           int batch,
                           int intermediate_size,
@@ -249,16 +258,18 @@ void launch_bias_residual(T* input,
     dim3 grid_dims((total_count - 1) / 1024 + 1);  // (batch_size);
 
     fused_bias_residual<<<grid_dims, block_dims, 0, stream>>>(
-        input, residual, bias, total_count, intermediate_size / 4);
+        input, residual, attn_output,bias, total_count, intermediate_size / 4);
 }
 
 template void launch_bias_residual<float>(float*,
+                                          const float*,
                                           const float*,
                                           const float*,
                                           int,
                                           int,
                                           cudaStream_t);
 template void launch_bias_residual<__half>(__half*,
+                                           const __half*,
                                            const __half*,
                                            const __half*,
                                            int,

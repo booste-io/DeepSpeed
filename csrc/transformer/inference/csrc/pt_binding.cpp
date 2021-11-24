@@ -171,15 +171,17 @@ at::Tensor ds_bias_gelu(at::Tensor& input, at::Tensor& bias)
 }
 
 template <typename T>
-at::Tensor ds_bias_residual(at::Tensor& input, at::Tensor& residual, at::Tensor& bias)
+at::Tensor ds_bias_residual(at::Tensor& input, at::Tensor& residual, at::Tensor& attn_output ,at::Tensor& bias)
 {
     auto input_cont = input.contiguous();
     auto residual_cont = residual.contiguous();
+    auto attn_output_cont = attn_output.contiguous();
 
     int bsz = input_cont.size(0) * input_cont.size(1);
 
     launch_bias_residual((T*)input_cont.data_ptr(),
                          (T*)residual_cont.data_ptr(),
+                         (T*)attn_output_cont.data_ptr(),
                          (T*)bias.data_ptr(),
                          bsz,
                          input_cont.size(2),

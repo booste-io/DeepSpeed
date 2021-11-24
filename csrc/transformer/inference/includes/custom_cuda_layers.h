@@ -40,6 +40,7 @@ void launch_bias_add(T* input, const T* bias, int hidden_size, int batch_size, c
 template <typename T>
 void launch_bias_residual(T* input,
                           const T* residual,
+                          const T* attn_output,
                           const T* bias,
                           int size,
                           int intermediate_size,
